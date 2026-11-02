@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administration des Licences - GEELPDC</title>
+    <style>
+        :root {
+            --fond: #f4f7fb;
+            --blanche: #ffffff;
+            --texte: #1d2a3a;
+            --bleu: #0b4f8a;
+            --bleu-fonce: #073b70;
+            --vert: #27ae60;
+            --rouge: #c0392b;
+            --gris: #7b8aa0;
+            --border: #c9d6e4;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--fond);
+            color: var(--texte);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: var(--blanche);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2 {
+            color: var(--bleu);
+            margin-top: 0;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: var(--bleu);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: var(--bleu-fonce);
+        }
+        .btn-danger { background-color: var(--rouge); }
+        .btn-danger:hover { background-color: #962d22; }
+        .btn-success { background-color: var(--vert); }
+        .btn-success:hover { background-color: #1e8449; }
+        .hidden { display: none; }
+        .error { color: var(--rouge); font-size: 13px; text-align: center; margin-top: 10px; }
+        .success { color: var(--vert); font-size: 13px; text-align: center; margin-top: 10px; }
+        .key-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--fond);
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+        .key-item button {
+            width: auto;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- ÉCRAN DE CONNEXION -->
+        <div id="login-screen">
+            <h2>🔐 Connexion Admin</h2>
+            <div class="form-group">
+                <label>Mot de passe administrateur :</label>
+                <input type="password" id="admin-password" placeholder="Entrez le mot de passe">
+            </div>
+            <button onclick="verifierMdp()">Se connecter</button>
+            <div id="login-error" class="error"></div>
+        </div>
+
+        <!-- TABLEAU DE BORD DE GESTION -->
+        <div id="dashboard-screen" class="hidden">
+            <h2>⚙️ Gestion des Licences</h2>
+            
+            <div class="form-group">
+                <label>GitHub Token (Personal Access Token avec droits 'repo') :</label>
+                <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Propriétaire (Ex: Policedev59)</label>
+                    <input type="text" id="gh-owner" value="Policedev59">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Dépôt (Ex: GEELPDC)</label>
+                    <input type="text" id="gh-repo" value="GEELPDC">
+                </div>
+            </div>
+
+            <button onclick="chargerLicences()" class="btn-success" style="margin-bottom: 20px;">Charger l'état actuel</button>
+
+            <div class="form-group">
+                <label>Statut Global du Logiciel :</label>
+                <select id="app-status">
+                    <option value="actif">✅ Actif (Logiciel autoriser à démarrer)</option>
+                    <option value="inactif">❌ Inactif (Logiciel bloqué à distance)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Ajouter une nouvelle clé de licence :</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="new-key" placeholder="Ex: ECOLE-TEST-2026">
+                    <button onclick="ajouterCle()" style="width: 120px;">Ajouter</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Clés actuellement autorisées :</label>
+                <div id="keys-list" style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); padding: 10px; border-radius: 6px; background: #fff;">
+                    <!-- Rempli par script -->
+                </div>
+            </div>
+
+            <button onclick="sauvegarderLicences()" style="margin-top: 15px;">💾 Enregistrer les modifications sur GitHub</button>
+            <div id="status-msg"></div>
+        </div>
+    </div>
+
+    <script>
+        const MDP_ATTENDU = "Police59199";
+        let shaFile = ""; // Nécessaire pour mettre à jour un fichier via l'API GitHub
+
+        function verifierMdp() {
+            const mdp = document.getElementById("admin-password").value;
+            if (mdp === MDP_ATTENDU) {
+                document.getElementById("login-screen").classList.add("hidden");
+                document.getElementById("dashboard-screen").classList.remove("hidden");
+            } else {
+                document.getElementById("login-error").innerText = "Mot de passe incorrect !";
+            }
+        }
+
+        async function chargerLicences() {
+            const token = document.getElementById("gh-token").value.trim();
+            const owner = document.getElementById("gh-owner").value.trim();
+            const repo = document.getElementById("gh-repo").value.trim();
+            const msgDiv = document.getElementById("status-msg");
+
+            if (!token) {
+                msgDiv.innerHTML = "<p class='error'>Veuillez entrer votre GitHub Token.</p>";
+                return;
+            }
+
+            try {
+                const url = `https://api.github.com/repos/${owner}/${repo}/contents/licence.json`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `token ${token}` }
+                });
+
+                if (!response.ok) throw new Error("Erreur de chargement (Vérifiez le token et le nom du repo).");
+
+                const data = await response.json();
+                shaFile = data.sha; // Sauvegarde du SHA pour l'écriture ultérieure
+
+                // Décodage du contenu Base64 renvoyé par GitHub
+                const contentDecoded = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+
+                document.getElementById("app-status").value = contentDecoded.statut || "actif";
+                
+                afficherCles(contentDecoded.cles_autorisees || []);
+                msgDiv.innerHTML = "<p class='success'>Licences chargées avec succès !</p>";
+            } catch (error) {
+                msgDiv.innerHTML = `<p class='error'>Erreur : ${error.message}</p>`;
+            }
+        }
+
+        let clesActuelles = [];
+
+        function afficherCles(cles) {
+            clesActuelles = cles;
+            const listDiv = document.getElementById("keys-list");
+            listDiv.innerHTML = "";
+            cles.forEach((cle, index) => {
+                listDiv.innerHTML += `
+                    <div class="key-item">
+                        <span>${cle}</span>
+                        <button class="btn-danger" onclick="supprimerCle(${index})">Supprimer</button>
+                    </div>
+                `;
+            });
+        }
+
+        function ajouterCle() {
+            const nouvelleCle = document.getElementById("new-key").value.trim();
+            if (nouvelleCle && !clesActuelles.includes(nouvelleCle)) {
+                clesActuelles.push(nouvelleCle);
+                document.getElementById("new-key").value = "";
+                afficherCles(clesActuelles);
+            }
+        }
+
+        function supprimerCle(index) {
+            clesActuelles.splice(index, 1);
+            afficherCles(clesActuelles);
+        }
+
+        async function sauvegarderLicences() {
+            const token = document.getElementById("gh-token").value.trim();
+            const owner = document.getElementById("gh-owner").value.trim();
+            const repo = document.getElementById("gh-repo").value.trim();
+            const statut = document.getElementById("app-status").value;
+            const msgDiv = document.getElementById("status-msg");
+
+            if (!token) {
+                msgDiv.innerHTML = "<p class='error'>GitHub Token requis pour sauvegarder.</p>";
+                return;
+            }
+
+            const nouveauContenuObj = {
+                statut: statut,
+                cles_autorisees: clesActuelles
+            };
+
+            // Encodage propre en Base64 compatible caractères accentués
+            const contenuBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(nouveauContenuObj, null, 4))));
+
+            try {
+                const url = `https://api.github.com/repos/${owner}/${repo}/contents/licence.json`;
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: "Mise à jour des licences via le panel web",
+                        content: contenuBase64,
+                        sha: shaFile
+                    })
+                });
+
+                if (!response.ok) throw new Error("Échec de la sauvegarde sur GitHub.");
+
+                const data = await response.json();
+                shaFile = data.content.sha; // Mettre à jour le SHA
+                msgDiv.innerHTML = "<p class='success'>Modifications enregistrées et appliquées à distance avec succès !</p>";
+            } catch (error) {
+                msgDiv.innerHTML = `<p class='error'>Erreur : ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
