@@ -2,6 +2,7 @@
     "statut": "actif",
     "cles_autorisees": [
         "GEELPDC-PRO-2026",
-        "ADMIN-KEY-123"
+        "ADMIN-KEY-123",
+        "TEST-2026"
     ]
 }
